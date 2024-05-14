@@ -10,7 +10,6 @@ struct ConstexprError { mutable int Value; };
 /* C++ does not provide any way of conditionally aborting constant evaluation. The only way to achieve this is by triggering undefined behavior. */
 #define FailConstantEvaluation(ErrorMessageString) reinterpret_cast<const ConstexprError*>(ErrorMessageString)->Value = 0;
 
-
 namespace PatternScannerImpl
 {
 	namespace ParserImpl
@@ -34,11 +33,6 @@ namespace PatternScannerImpl
 				return GetValueFromHexDigit(C);
 
 			return 0xFF;
-		}
-
-		consteval bool IsFF(uint8_t Value)
-		{
-			return Value == 0xFF;
 		}
 
 		constexpr uint8_t ParseHexPair(char L, char R)
@@ -93,58 +87,204 @@ namespace PatternScannerImpl
 		}
 	}
 
+	template<typename LT, typename RT>
+	inline constexpr LT Min(LT L, RT R)
+	{
+		static_assert(std::is_integral_v<LT> && std::is_integral_v<RT>, "Type must be of integral value!");
+
+		return L < R ? L : R;
+	}
+
+	template<typename T>
+	inline constexpr T Max(T L, T R)
+	{
+		static_assert(std::is_integral_v<T>, "Type must be of integral value!");
+
+		return L > R ? L : R;
+	}
+
+
+	/* A struct wrapping the 2-bit information stored by PatternInfo::OccurenceMap */
+	struct ByteInfo
+	{
+	private:
+		/* Data available for this byte */
+		uint8_t DataByte : 2;
+
+		/* Reserved bits used by other entries in the OccurenceMap */
+		uint8_t RESERVED : 6;
+
+		/* DataByte stores the number of thirds of a pattern that can be skipped for this byte */
+		int32_t ThirdOfPatternLength;
+
+	public:
+		constexpr ByteInfo(uint8_t ByteData, int32_t PatternLength)
+			: DataByte(ByteData), RESERVED(0), ThirdOfPatternLength(PatternLength / 3)
+		{
+		}
+
+	private:
+		inline constexpr uint8_t GetThirdsToSkip() const
+		{
+			/* 0b00 is reserved for "Byte is not in pattern" */
+			return DataByte - 1;
+		}
+
+	public:
+		inline constexpr bool IsInPattern() const
+		{
+			return DataByte > 0x0;
+		}
+
+		inline constexpr uint8_t GetByteSkipCount() const
+		{
+			return GetThirdsToSkip() * ThirdOfPatternLength;
+		}
+	};
 
 	template<int32_t PatternByteCount>
 	struct PatternInfo
 	{
 	private:
-		std::array<int16_t, PatternByteCount> PatternBytes;
+		enum PatternThird
+		{
+			NoOccurence = 0b00,
+
+			OneThird = 0b01,
+			TwoThrids = 0b10,
+			ThreeThrids = 0b11
+		};
+	private:
+		/* Number of bytes required to allocate Bitmap with 2-bits per byte */
+		static constexpr uint8_t NumBytesForBitmap = 64;
+
+		/* Third of the pattern length, used for OccurenceMap setup */
+		static constexpr int32_t ThirdOfPatternLength = PatternByteCount / 3;
+
+	private:
+		static constexpr uint8_t TwoBitsSet = 0b11;
+
+	private:
+		/* Bytes of the pattern in the range [0, 255] and -1 representing wildcards */
+		int16_t PatternBytes[PatternByteCount] = { 0x0 };
+
+		/* Bitmap, of 2-bits per byte-value, describing how far from the back a byte first occures [00 -> not in pattern; 01 -> first third; 10 -> second third; 11 -> third third]*/
+		uint8_t OccurenceMap[NumBytesForBitmap] = { 0x0 };
+		
+	public:
+		inline consteval PatternInfo(const std::vector<int16_t>& InBytes)
+		{
+			std::copy_n(InBytes.data(), PatternScannerImpl::Min(PatternByteCount, InBytes.size()), PatternBytes);
+			InitializeOccurenceMap(InBytes);
+		}
+
+	private:
+		inline consteval void InitializeOccurenceMap(const std::vector<int16_t>& InPatternBytes)
+		{
+			constexpr int32_t TwoThirdsOfLength = (PatternByteCount * 2) / 3;
+
+			for (int i = InPatternBytes.size() - 1; i >= 0; --i)
+			{
+				const int16_t CurrentPatternByte = InPatternBytes[i];
+
+				/* We don't want to do anything with wildcards */
+				if (CurrentPatternByte == -1)
+					continue;
+
+				/* Marker for which thrid of the pattern the byte first occures, starting at the back */
+				const PatternThird CurrentThirdMarker = i >= TwoThirdsOfLength ? PatternThird::OneThird : i >= ThirdOfPatternLength ? PatternThird::TwoThrids : PatternThird::OneThird;
+
+				uint8_t ByteOccurenceInfo = GetEntryFromOccurenceMap(static_cast<const uint8_t>(CurrentPatternByte));
+
+				if (ByteOccurenceInfo == static_cast<uint8_t>(PatternThird::NoOccurence))
+					SetEntryInOccurenceMap(static_cast<const uint8_t>(CurrentPatternByte), CurrentThirdMarker);
+			}
+		}
+
+	private:
+		inline constexpr uint8_t GetEntryFromOccurenceMap(uint8_t Index) const
+		{
+			const uint8_t ByteIndex = Index / 4;
+			const uint8_t ShiftCount = (Index & TwoBitsSet) << 1;
+			const uint8_t BitMask = TwoBitsSet << ShiftCount;
+
+			return (OccurenceMap[ByteIndex] & BitMask) >> ShiftCount;
+		}
+
+		inline constexpr void SetEntryInOccurenceMap(uint8_t Index, PatternThird CurrentThird)
+		{
+			const uint8_t ByteIndex = Index / 4;
+			const uint8_t ShiftCount = (Index & TwoBitsSet) << 1;
+			const uint8_t BitMask = TwoBitsSet << ShiftCount;
+
+			const uint8_t SetMask = CurrentThird << ShiftCount;
+
+			/* Get a ref to the byte, clear the entry-value and set the new one. */
+			uint8_t& ByteRef = OccurenceMap[ByteIndex];
+			ByteRef &= ~BitMask;
+			ByteRef |= SetMask;
+		}
+
+	public:
+		inline constexpr ByteInfo GetByteInfo(uint8_t Index) const
+		{
+			return ByteInfo(GetEntryFromOccurenceMap(Index), GetLength());
+		}
+
+		inline constexpr int32_t GetLength() const
+		{
+			return PatternByteCount;
+		}
+
+	public:
+		inline constexpr int16_t operator[](size_t Index) const
+		{
+			if (Index < 0 || Index >= GetLength())
+				return 0xCDCD;
+
+			return PatternBytes[Index];
+		}
 	};
 
-	inline bool IsInPattern(uint8_t Value)
-	{
-		return true;
-	}
-
-	inline uint16_t GetFirstOccurenceOfValueFromBack(uint8_t Value)
-	{
-		/* Return actual pos in the pattern, the check for if (IsInPattern(Value)) has been done already. */
-		return 0x0;
-	}
-
 	/* Pseudo-implementation of the boyer-moore algorithm */
-	inline const void* FindPattern(const uint8_t* Memory, int32_t SearchRange, int16_t* PatternBytes, int32_t PatternLength)
+	template<int32_t PatternLengthBytes>
+	inline const void* FindPattern(const uint8_t* Memory, int32_t SearchRange, const PatternInfo<PatternLengthBytes>& Pattern)
 	{
 		if (SearchRange <= 0x0)
 			return nullptr;
 
-		for (int i = PatternLength; i < SearchRange; i++)
-		{
-			for (int j = 0x0; j < PatternLength; j++)
-			{
-				const int32_t CurrentPatternIndex = (PatternLength - 1) - j;
+		const int32_t PatternMaxIndex = Pattern.GetLength() - 1;
 
-				const int16_t CurrentPatternValue = PatternBytes[CurrentPatternIndex];
+		for (int i = Pattern.GetLength(); i < SearchRange; i++)
+		{
+			for (int j = 0x0; j < Pattern.GetLength(); j++)
+			{
+				const int32_t CurrentPatternIndex = PatternMaxIndex - j;
+
+				const int16_t CurrentPatternValue = Pattern[CurrentPatternIndex];
 				const uint8_t CurrentInnerLoopValue = Memory[i - j];
 
+				/* Wildcard, skip this byte */
 				if (CurrentPatternValue == -1)
 					continue;
 
 				if (static_cast<uint8_t>(CurrentPatternValue) == CurrentInnerLoopValue)
 				{
-					if (j == (PatternLength - 1))
+					if (j == PatternMaxIndex)
 						return Memory + i - j;
 
 					continue;
 				}
 
-				if (!IsInPattern(CurrentInnerLoopValue))
+				const ByteInfo Info = Pattern.GetByteInfo(CurrentInnerLoopValue);
+
+				if (!Info.IsInPattern())
 				{
-					i += PatternLength;
+					i += Pattern.GetLength();
 					break;
 				}
 
-				i += GetFirstOccurenceOfValueFromBack(CurrentInnerLoopValue);
+				i += Info.GetByteSkipCount();
 				break;
 			}
 		}
