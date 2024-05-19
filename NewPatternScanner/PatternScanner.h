@@ -103,14 +103,45 @@ namespace PatternScannerImpl
 		return L > R ? L : R;
 	}
 
-	template<typename T>
-	inline constexpr T Max(T L, T R)
+	inline constexpr uint8_t ValueToByteWidth(uint64_t Value)
 	{
-		static_assert(std::is_integral_v<T>, "Type must be of integral value!");
+		if (Value > std::numeric_limits<uint32_t>::max())
+		{
+			return 0x8;
+		}
+		else if (Value > std::numeric_limits<uint16_t>::max())
+		{
+			return 0x4;
+		}
+		else if (Value > std::numeric_limits<uint8_t>::max())
+		{
+			return 0x2;
+		}
 
-		return L > R ? L : R;
+		return 0x1;
 	}
 
+	template<uint8_t Size>
+	struct SelectUnsignedIntegralTypeBySize
+	{
+		static_assert(Size > 8, "The max ammount of byte-width supported is 8!");
+		static_assert(Size == 3 || Size == 6 || Size == 7, "The byte-width must be 1; 2; 4; 8; but was 3; 6; 7!");
+	};
+
+	template<>
+	struct SelectUnsignedIntegralTypeBySize<1> { using Type = uint8_t; };
+
+	template<>
+	struct SelectUnsignedIntegralTypeBySize<2> { using Type = uint16_t; };
+
+	template<>
+	struct SelectUnsignedIntegralTypeBySize<4> { using Type = uint32_t; };
+
+	template<>
+	struct SelectUnsignedIntegralTypeBySize<8> { using Type = uint64_t; };
+
+	template<uint64_t Value>
+	using ValueToUnsingedIntegralType = SelectUnsignedIntegralTypeBySize<ValueToByteWidth(Value)>::Type;
 
 	/* A struct wrapping the 2-bit information stored by PatternInfo::OccurenceMap */
 	struct ByteInfo
