@@ -103,6 +103,14 @@ namespace PatternScannerImpl
 		return L > R ? L : R;
 	}
 
+	template<typename T>
+	inline constexpr T Max(T L, T R)
+	{
+		static_assert(std::is_integral_v<T>, "Type must be of integral value!");
+
+		return L > R ? L : R;
+	}
+
 
 	/* A struct wrapping the 2-bit information stored by PatternInfo::OccurenceMap */
 	struct ByteInfo
@@ -142,7 +150,7 @@ namespace PatternScannerImpl
 		}
 	};
 
-	template<int32_t PatternByteCount>
+	template<int32_t PatternByteCount, int32_t ByteCountWithoutWildcards>
 	struct PatternInfo
 	{
 	private:
@@ -159,7 +167,7 @@ namespace PatternScannerImpl
 		static constexpr uint8_t NumBytesForBitmap = 64;
 
 		/* Third of the pattern length, used for OccurenceMap setup */
-		static constexpr int32_t ThirdOfPatternLength = PatternByteCount / 3;
+		static constexpr int32_t ThirdOfPatternLength = ByteCountWithoutWildcards / 3;
 
 	private:
 		static constexpr uint8_t TwoBitsSet = 0b11;
@@ -181,8 +189,9 @@ namespace PatternScannerImpl
 	private:
 		inline consteval void InitializeOccurenceMap(const std::vector<int16_t>& InPatternBytes)
 		{
-			constexpr int32_t TwoThirdsOfLength = (PatternByteCount * 2) / 3;
+			constexpr int32_t TwoThirdsOfLength = (ByteCountWithoutWildcards * 2) / 3;
 
+			int NonMaskByteIndexPlusOne = InPatternBytes.size();
 			for (int i = InPatternBytes.size() - 1; i >= 0; --i)
 			{
 				const int16_t CurrentPatternByte = InPatternBytes[i];
@@ -191,8 +200,10 @@ namespace PatternScannerImpl
 				if (CurrentPatternByte == -1)
 					continue;
 
+				NonMaskByteIndexPlusOne--;
+
 				/* Marker for which thrid of the pattern the byte first occures, starting at the back */
-				const PatternThird CurrentThirdMarker = i >= TwoThirdsOfLength ? PatternThird::OneThird : i >= ThirdOfPatternLength ? PatternThird::TwoThrids : PatternThird::OneThird;
+				const PatternThird CurrentThirdMarker = NonMaskByteIndexPlusOne >= TwoThirdsOfLength ? OneThird : NonMaskByteIndexPlusOne >= ThirdOfPatternLength ? TwoThrids : OneThird;
 
 				uint8_t ByteOccurenceInfo = GetEntryFromOccurenceMap(static_cast<const uint8_t>(CurrentPatternByte));
 
@@ -233,7 +244,12 @@ namespace PatternScannerImpl
 
 		inline constexpr int32_t GetLength() const
 		{
-			return PatternByteCount;
+			return PatternByteCount; 
+		}
+
+		inline constexpr int32_t GetLengthWithoutWildcards() const
+		{
+			return ByteCountWithoutWildcards;
 		}
 
 	public:
@@ -247,8 +263,8 @@ namespace PatternScannerImpl
 	};
 
 	/* Pseudo-implementation of the boyer-moore algorithm */
-	template<int32_t PatternLengthBytes>
-	inline const void* FindPattern(const uint8_t* Memory, int32_t SearchRange, const PatternInfo<PatternLengthBytes>& Pattern)
+	template<int32_t PatternLengthBytes, int32_t PatternLengthWithoutWildcards>
+	inline const void* FindPattern(const uint8_t* Memory, int32_t SearchRange, const PatternInfo<PatternLengthBytes, PatternLengthWithoutWildcards>& Pattern)
 	{
 		if (SearchRange <= 0x0)
 			return nullptr;

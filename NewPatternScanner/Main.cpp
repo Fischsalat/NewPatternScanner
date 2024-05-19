@@ -30,17 +30,28 @@ consteval std::array<int16_t, MakeValidArrayNum(NumResultEntries)> TestPattern(c
 	return RetArrayForDebug;
 }
 
-consteval int32_t Test()
+consteval int32_t Test(uint8_t Value, const std::initializer_list<int16_t>& Values = { 0xFF, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA, -1 })
 {
-	const std::vector<int16_t> Vec{20, 210, 10, 0, 1, -1};
-	PatternScannerImpl::PatternInfo<6> Data(Vec);
+	const std::vector<int16_t> Vec = Values;
+	PatternScannerImpl::PatternInfo<7, 6> Data(Vec);
 
 	return Data.GetByteInfo(20).GetByteSkipCount();
 }
 
 inline bool TestFindSingleBytePattern()
 {
-	std::cout << "Hell: " << Test() << std::endl;
+	std::cout << std::hex << "Test(0xAA): " << Test(0xAA) << std::endl;
+
+	static_assert(Test(0xAA) == 0x3, "Third of { 0xAA3 }, should be { 0x3 }");
+	static_assert(Test(0xAA) == 0x2, "Third of { 0xAA2 }, should be { 0x2 }");
+	static_assert(Test(0xAA) == 0x1, "Third of { 0xAA1 }, should be { 0x1 }");
+	static_assert(Test(0xAA) == 0xFF, "Third of { 0xAA1 }, should be { 0xFF }");
+	static_assert(Test(0xAA) == 0x0, "Third of { 0xAA }, should be { 0x0 }");
+	static_assert(Test(0xBB) == 0x0, "Third of { 0xBB }, should be { 0x0 }");
+	static_assert(Test(0xCC) == 0x0, "Third of { 0xCC }, should be { 0x1 }");
+	static_assert(Test(0xDD) == 0x0, "Third of { 0xDD }, should be { 0x1 }");
+	static_assert(Test(0xEE) == 0x0, "Third of { 0xEE }, should be { 0x2 }");
+	static_assert(Test(0xFF) == 0x0, "Third of { 0xFF }, should be { 0x2 }");
 
 	return false;
 }
