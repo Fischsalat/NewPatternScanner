@@ -30,17 +30,44 @@ consteval std::array<int16_t, MakeValidArrayNum(NumResultEntries)> TestPattern(c
 	return RetArrayForDebug;
 }
 
-consteval int32_t Test(uint8_t Value, const std::initializer_list<int16_t>& Values = { 0xFF, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA, -1 })
+inline consteval auto GetPatternInfo()
 {
-	const std::vector<int16_t> Vec = Values;
-	PatternScannerImpl::PatternInfo<7, 6> Data(Vec);
+	const std::vector<int16_t> Vec = { 0x48, 0x8B, -1, 0x48, 0xC1 };
+	PatternScannerImpl::PatternInfo<5> Data(Vec);
 
-	return Data.GetByteInfo(20).GetByteSkipCount();
+	return Data;
 }
+
+int32_t TestFindPattern(const std::initializer_list<int16_t>& Values = { 0x48, 0x8B, -1, -1, 0x48, 0xC1 })
+{
+	//const std::vector<int16_t> Vec = Values;
+	//PatternScannerImpl::PatternInfo<5> Data(Vec);
+
+	uint8_t FakeMemory[] = {
+		0x48, 0x8B, 0x15, 0x81, 0x4B, 0x0F, 0x00,
+		0x48, 0x8B, 0xC1,
+		0x48, 0xC1, 0xE8, 0x09,
+		0x48, 0x8B, 0x14, 0xC2,
+		0x48, 0x8B, 0xC1,
+		0x48, 0xC1, 0xE8, 0x03,
+		0xF6, 0xC1, 0x0F,
+		0x75, 0x07,
+		0x48, 0x0F, 0xA3, 0xC2,
+		0x73, 0x0C,
+		0xC3
+	};
+
+	int32_t Result = PatternScannerImpl::FindPattern<true>(FakeMemory, sizeof(FakeMemory), GetPatternInfo());
+
+	//const bool b = Result < (void*)30;
+
+	return Result;
+}
+
 
 inline bool TestFindSingleBytePattern()
 {
-	std::cout << std::hex << "Test(0xAA): " << Test(0xAA) << std::endl;
+	std::cout << std::hex << "TestFindPattern(): " << TestFindPattern() << std::endl;
 
 	//static_assert(Test(0xAA) == 0x3, "Third of { 0xAA3 }, should be { 0x3 }");
 	//static_assert(Test(0xAA) == 0x2, "Third of { 0xAA2 }, should be { 0x2 }");
