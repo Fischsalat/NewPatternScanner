@@ -54,6 +54,73 @@ namespace PatternScannerImpl
 			return (HexDigitToNumber(L) << 4) | HexDigitToNumber(R);
 		}
 
+		/*
+		* Pattern Syntax: "48 8B 50|60 ? ? [49 ? B8 | 48 8B] 00 [?2] 40 [?1-4] 00 00 {0} {1} 22"
+		* 
+		* Wildcard: "?" -> Any arbitrary byte value
+		* 
+		* Toggle:
+		*	* ShortToggle: "49|59" -> Byte can either be 0x49 or 0x59. Size is 1 byte on both sides.
+		*	* LongToggle: "[49 8B ? | ? 48] 50 70" -> At this point in the pattern there should either occure "49 8B ?", or "? 48", before the pattern continues normally with "50 70"
+		* 
+		* Omissions: 
+		*	* Single-Byte: "50 [?] 48" -> Allows for a single extra **optional** byte inbetween 50 and 48. Will match both "50 48" as well as "50 n 48" where n is any byte value.
+		*	* N-Byte: "50 [?2] 48" (N = 2) -> Allows for N (=2) extra **optional** bytes inbetween 50 and 48. Will match "50 48" as well as "50 n m 48" where n, m are byte values.
+		*	* N-M-Range: "50 [?1-3] 48" (N=1, M=3) -> Allows for N to M random bytes to appear in the pattern. 
+		*		* Will **NOT** match any ammount of omitted bytes outside of the range [N, M]. Will not match "50 48", as 0 is outside of the range.
+		*		* Will match "50 X1 48", "50 X1 X2 48", "50 X1 X2 X3 48", where X1, X2, X3 are byte values.
+		*		* Will not match "50, X1, X2, X3, X4 48", as upper limit M=4 is out of range.
+		* 
+		* Runtime-Value:
+		*	* Indicates that the byte at this position is not known at compile-time and is later supplied as a runtime-value
+		*	* "{0} 49" indicates that the first byte is supposed to be replaced by the first user-supplied byte value. If the first value is 0x33 the pattern searched will be "33 49"
+		*   * The maximum number of runtime-supplied values is 16 (0 - F)
+		* 
+		* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+		* Implemenation Notes:
+		*	* Constexpr evaluate used featuers and templatize pattern-scanner implementation based on the used features to avoid checking for things like Omissions if there aren't any
+		*	*
+		*	* struct ShortToggle { }; 
+		*	* struct LongToggle { NumBytesLeft, NumBytesRight }; 
+		* 	*
+		* 	* struct SingleByteOmission { }; 
+		* 	* struct NByteOmission { NumOptionalBytes }; 
+		* 	* struct NMByteOmission { MinNumOptionalBytes, MaxNumOptionalBytes }; 
+		* 	*
+		* 	* struct ShortToggle { }; 
+		*/
+		template<int32_t PatternStrLength>
+		consteval int32_t ValidatePatternAndGetByteLength(const char(&PatternStr)[PatternStrLength])
+		{
+			bool bLastCharWasHexDigit = true;
+
+			/* Handeling Toggles/Omissions */
+			bool bAreSquareBracketsOpen = false;
+
+			/* Hnadling Togles */
+			bool bEncounteredIdkThisVariableIsUnfinishedImStillWorkingStuffOutRightNow;
+
+			/* Handeling RuntimeValues {0} {1} ... {F} */
+			bool bAreBracesOpen = false;
+			bool bEncounteredSingleDigit = false;
+
+
+
+
+			for (int i = 0; i < PatternStrLength; i++)
+			{
+				const char C = PatternStr[i];
+
+				/* Ignore spaces */
+				if (C == ' ')
+					continue;
+
+				//if ()
+			}
+
+			return 0;
+		}
+
 		template<int32_t PatternStrLength>
 		consteval void ParseStringToByteArray(const char(&PatternStr)[PatternStrLength], std::vector<int16_t>& ByteValues)
 		{
@@ -233,6 +300,31 @@ namespace PatternScannerImpl
 			return GetPatternValue(Index);
 		}
 	};
+
+	consteval std::vector<int16_t> GetVector(const std::vector<char>& Str)
+	{
+		std::vector<int16_t> PatternBytes;
+		//ParserImpl::ParseStringToByteArray(PatternStr2, PatternBytes);
+
+		for (int i = 0; Str[i] != '\n'; i++)
+			PatternBytes[i] = 7;
+
+		return PatternBytes;
+	}
+
+	template<int32_t PatternStrLength>
+	consteval decltype(auto) CreatePattnerInfo(const char(&PatternStr)[PatternStrLength])
+	{
+		std::vector<char> Str(PatternStrLength);
+
+		for (int i = 0; i < PatternStrLength; i++)
+			Str.push_back(PatternStr[i]);
+
+		//constexpr auto PatternBytes = GetVector(Str);
+		//
+		//return PatternInfo<PatternBytes.size()>(PatternBytes);
+		return 1;
+	}
 
 	/* Pseudo-implementation of the Knuth-Morris-Pratt algorithm */
 	template<bool bIsTest = false, int32_t PatternLengthBytes>

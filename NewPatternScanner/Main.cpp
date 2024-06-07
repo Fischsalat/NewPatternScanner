@@ -83,8 +83,94 @@ inline bool TestFindSingleBytePattern()
 	return false;
 }
 
+//consteval int32_t FuncA(const char* Str)
+//{
+//	return Str != nullptr ? 40 : 2;
+//}
+//
+//template<int N>
+//consteval int32_t FuncB(const char(&PatternStr)[N])
+//{
+//	constexpr int32_t A = FuncA(PatternStr);
+//
+//	static_assert(A == 40, "What???");
+//
+//	return A + 20;
+//}
+
+template<typename T>
+consteval int32_t CountParams(T&& Parms...)
+{
+	return sizeof...(Parms);
+}
+
+consteval size_t RetTypeSize(auto Callback)
+{
+	//static_assert(Callback() > 0, "Test parm was invalid!");
+
+	return Callback() + 3;
+}
+
+template<int N>
+consteval int32_t SelectSomething(const char(&PatternStr)[N])
+{
+	constexpr int32_t Count = 0;
+	//const char* Copy = PatternStr;
+	//while (PatternStr[Count++] != '\0');
+
+	size_t Value = RetTypeSize([=]() constexpr -> int32_t { return 7; });
+
+	return Value;
+}
+
+template<auto... Params, int N>
+consteval int32_t DoNothing(const char(&Str)[N])
+{
+	return sizeof...(Params) * N;
+}
+
+/* Max supported byte-size is 1024*/
+struct BigBuffer
+{
+private:
+	static constexpr size_t BufferSize = 1024;
+
+public:
+	std::array<uint8_t, BufferSize> Data;
+	int32_t Size;
+};
+
+consteval auto ParsePatternInfo(const char* Pattern)
+{
+	BigBuffer Ret;
+
+	if (!Pattern)
+		return Ret;
+
+	int32_t Count = 0;
+	while (Pattern[Count++] != '\0');
+
+	for (int i = 0; Count; i++)
+	{
+
+	}
+
+	return Ret;
+}
+
+
 int main()
 {
+	constexpr int32_t Var19AB2F2FF = DoNothing<20, CountParams(0, nullptr, false, true, "fortnite"), - 3.02f, 1ull>("Hell world!");
+
+	constexpr int32_t SelectedValue = SelectSomething("ToLong");
+
+	std::cout << "Var19AB2F2FF: " << Var19AB2F2FF << std::endl;
+	std::cout << "SelectedValue: " << SelectedValue << std::endl;
+
+	//constexpr auto EEE = FuncB("Hell world!");
+	constexpr auto Info = PatternScannerImpl::CreatePattnerInfo("48 8B ? ? E8");
+
 	PatternScannerImpl::ValueToUnsingedIntegralType<0xFFFFFFFFFFFFFFFF> Varr = 30;
 	PatternScannerImpl::ValueToUnsingedIntegralType<sizeof(float) != 6> Varr3 = 30;
 
