@@ -87,7 +87,7 @@ namespace PatternScannerImpl
 		* 	* struct NByteOmission { NumOptionalBytes }; 
 		* 	* struct NMByteOmission { MinNumOptionalBytes, MaxNumOptionalBytes }; 
 		* 	*
-		* 	* struct ShortToggle { }; 
+		* 	* struct RuntimeValue { }; 
 		*/
 		template<int32_t PatternStrLength>
 		consteval int32_t ValidatePatternAndGetByteLength(const char(&PatternStr)[PatternStrLength])
